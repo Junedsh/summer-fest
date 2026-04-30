@@ -401,14 +401,14 @@ with tab_achieve:
         # --- Merge ---
         perf = tgt.merge(act, on=["line_manager", "abo"], how="left")
         perf["actual"] = perf["actual"].fillna(0)
-        perf["mtd_achieve_pct"] = (perf["actual"] / perf["mtd_target"].replace(0, float("nan")) * 100).round(1)
-        perf["full_achieve_pct"] = (perf["actual"] / perf["target"].replace(0, float("nan")) * 100).round(1)
-        perf["mtd_gap"] = perf["actual"] - perf["mtd_target"]
+        perf["mtd_achieve_pct"] = (perf["actual"] / perf["mtd_target"].replace(0, float("nan")) * 100).round(1).fillna(0)
+        perf["full_achieve_pct"] = (perf["actual"] / perf["target"].replace(0, float("nan")) * 100).round(1).fillna(0)
+        perf["mtd_gap"] = perf["actual"] - perf["mtd_target"].fillna(0)
 
         # --- Rank within each LM (by MTD achievement %) ---
         perf["rank"] = perf.groupby("line_manager")["mtd_achieve_pct"].rank(
             ascending=False, method="min"
-        ).astype(int)
+        ).fillna(999).astype(int)
 
         perf["prize"] = perf["rank"].map({1: f"🥇 ₹{PRIZE_1ST:,}", 2: f"🥈 ₹{PRIZE_2ND:,}"}).fillna("")
 
