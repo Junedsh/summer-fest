@@ -149,7 +149,7 @@ with tab_targets:
     from datetime import date
 
     st.subheader("🎯 May Target Setting — based on 15–29 Apr baseline")
-    GROWTH = 0.25
+    GROWTH = 0.20
     st.info(
         "**Logic:** Revenue from 15 Apr – 29 Apr (15 days) ÷ 15 = per-day run rate → × 31 = May baseline.  \n"
         f"**May Target = Baseline × {1 + GROWTH:.2f}** (i.e. {int(GROWTH*100)}% growth on baseline).  \n"
@@ -180,7 +180,7 @@ with tab_targets:
         c1.metric("15–29 Apr Revenue", f"₹{total_base_rev:,.0f}")
         c2.metric("Per-Day Revenue", f"₹{per_day_rev:,.0f}")
         c3.metric("May Baseline (×31)", f"₹{may_baseline:,.0f}")
-        c4.metric("May Target (+25%)", f"₹{may_target:,.0f}")
+        c4.metric("May Target (+20%)", f"₹{may_target:,.0f}")
 
         st.divider()
 
@@ -203,8 +203,8 @@ with tab_targets:
 
         # Display-friendly formatting
         display_targets = abo_targets.copy()
-        display_targets.columns = ["Line Manager", "ABO", "15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+25%)"]
-        for col in ["15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+25%)"]:
+        display_targets.columns = ["Line Manager", "ABO", "15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+20%)"]
+        for col in ["15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+20%)"]:
             display_targets[col] = display_targets[col].apply(lambda x: f"₹{x:,.0f}")
 
         st.dataframe(display_targets, use_container_width=True, hide_index=True)
@@ -220,8 +220,8 @@ with tab_targets:
             .reset_index()
         )
         display_lm = lm_targets.copy()
-        display_lm.columns = ["Line Manager", "15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+25%)"]
-        for col in ["15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+25%)"]:
+        display_lm.columns = ["Line Manager", "15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+20%)"]
+        for col in ["15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+20%)"]:
             display_lm[col] = display_lm[col].apply(lambda x: f"₹{x:,.0f}")
 
         st.dataframe(display_lm, use_container_width=True, hide_index=True)
@@ -245,8 +245,8 @@ with tab_targets:
         ).reset_index(drop=True)
 
         display_stores = store_targets.copy()
-        display_stores.columns = ["Line Manager", "ABO", "Store", "15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+25%)"]
-        for col in ["15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+25%)"]:
+        display_stores.columns = ["Line Manager", "ABO", "Store", "15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+20%)"]
+        for col in ["15-29 Apr Rev", "Per Day Rev", "May Baseline", "May Target (+20%)"]:
             display_stores[col] = display_stores[col].apply(lambda x: f"₹{x:,.0f}")
 
         st.dataframe(display_stores, use_container_width=True, hide_index=True)
@@ -280,7 +280,7 @@ with tab_achieve:
     BASELINE_END_A   = date(2026, 4, 29)
     BASELINE_DAYS_A  = 15
     TARGET_DAYS_A    = CONTEST_DAYS
-    GROWTH_A         = 0.25
+    GROWTH_A         = 0.20
 
     PRIZE_1ST = 6500
     PRIZE_2ND = 3500
@@ -289,6 +289,7 @@ with tab_achieve:
     st.info(
         f"**Contest:** Top 2 ABOs under each Line Manager win prizes.  \n"
         f"🥇 1st Prize: **₹{PRIZE_1ST:,}**  |  🥈 2nd Prize: **₹{PRIZE_2ND:,}**  \n"
+        f"⚠️ **Note:** An ABO will only qualify for the prize if they achieve at least **95%** of their Target.  \n"
         f"MTD Achievement % = Actual Revenue ÷ MTD Target × 100"
     )
 
