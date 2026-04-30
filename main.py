@@ -49,18 +49,21 @@ mtd_day = st.sidebar.number_input(
 
 # Line Manager
 all_lms = sorted(df["line_manager"].dropna().unique())
-selected_lms = st.sidebar.multiselect("Line Manager", all_lms, default=all_lms)
+selected_lms = st.sidebar.multiselect("Line Manager", all_lms, default=[], placeholder="Select Line Managers (leave empty for All)")
 
 # ABO
 all_abos = sorted(df["abo"].dropna().unique())
-selected_abos = st.sidebar.multiselect("ABO", all_abos, default=all_abos)
+selected_abos = st.sidebar.multiselect("ABO", all_abos, default=[], placeholder="Select ABOs (leave empty for All)")
 
 # ─── Apply Filters ─────────────────────────────────────────────────────────────
 fdf = df.copy()
 fdf = fdf[(fdf["transaction_date"] >= start_date) & (fdf["transaction_date"] <= end_date)]
 fdf = fdf[pd.to_datetime(fdf["transaction_date"]).dt.day <= mtd_day]
-fdf = fdf[fdf["line_manager"].isin(selected_lms)]
-fdf = fdf[fdf["abo"].isin(selected_abos)]
+
+if selected_lms:
+    fdf = fdf[fdf["line_manager"].isin(selected_lms)]
+if selected_abos:
+    fdf = fdf[fdf["abo"].isin(selected_abos)]
 
 # ─── Revenue & RGM Calculation ─────────────────────────────────────────────────
 def calc_metrics(data):
