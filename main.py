@@ -1,81 +1,12 @@
 import os
 import streamlit as st
-import psycopg2
 import pandas as pd
 from datetime import datetime
 
-# ─── Credentials ───────────────────────────────────────────────────────────────
-DB_USER     = os.environ.get("DB_USER")     or st.secrets["redshift"]["user"]
-DB_PASSWORD = os.environ.get("DB_PASSWORD") or st.secrets["redshift"]["password"]
-DB_HOST     = os.environ.get("DB_HOST")     or st.secrets["redshift"]["host"]
-DB_PORT     = os.environ.get("DB_PORT")     or st.secrets["redshift"]["port"]
-DB_NAME     = "prod2-generico"
-SCHEMA      = "prod2-generico"
-
-# ─── Connection ────────────────────────────────────────────────────────────────
-def get_conn():
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, database=DB_NAME,
-        user=DB_USER, password=DB_PASSWORD
-    )
-
-# ─── Drug IDs ──────────────────────────────────────────────────────────────────
-DRUG_IDS = (
-    56119,57077,759105,499772,499771,
-    758696,758707,522142,658028,412912,410448,513711,514824,487154,495969,502937,510083,
-    759024,513715,759152,759153,759154,490446,617966,514194,514146,519888,519887,519274,522971,519275,630789,758887,
-    500093,500094,755165,519304,513380,632714,755205,500343,758512,755166,758853,617692,755163,488841,758855,758880,
-    758882,758883,395023,523051,499171,500441,632188,632209,632210,758885,758886,632208,514786,758901,758951,
-    758903,512589,514407,758957,758907,514790,758900,522144
-)
-
 # ─── Data Fetch (cached once per day) ─────────────────────────────────────────
-@st.cache_data(ttl=86400, show_spinner="Fetching data from Redshift…")
+@st.cache_data(ttl=86400, show_spinner="Loading data...")
 def load_data():
-    conn = get_conn()
-    drug_list = ",".join(str(d) for d in DRUG_IDS)
-    query = f"""
-        SELECT
-            s."created-date"                AS transaction_date,
-            s.abo,
-            s."line-manager"                AS line_manager,
-            s."store-name"                  AS store_name,
-            s."bill-flag"                   AS bill_flag,
-            s."promo-code"                  AS promo_code,
-            s."promo-discount"              AS promo_discount,
-            s."drug-name"                   AS drug_name,
-            s."net-quantity"                AS net_quantity,
-
-            ( (s."revenue-value"
-               - CASE WHEN s."promo-code" LIKE 'ZRF%' THEN s."promo-discount" ELSE 0 END)
-              / NULLIF(1.0 + ((s."sgst-rate" + s."cgst-rate" + s."igst-rate") / 100.0), 0)
-            ) AS revenue_excl_tax,
-            (s."revenue-value" - CASE WHEN s."promo-code" LIKE 'ZRF%' THEN s."promo-discount" else 0 end ) as rev_with_tax,
-
-            ( CASE WHEN s."promo-code" LIKE 'ZRF%' AND s."promo-discount" > 0
-                   THEN (s."purchase-rate" * s."net-quantity")
-                        / NULLIF(1.0 + ((ii."sgst-rate" + ii."cgst-rate" + ii."igst-rate") / 100.0), 0)
-                   ELSE 0 END
-            ) AS zrf_purchase_excl_tax,
-
-            ( (s."purchase-rate" * s."net-quantity")
-              / NULLIF(1.0 + ((ii."sgst-rate" + ii."cgst-rate" + ii."igst-rate") / 100.0), 0)
-            ) AS purchase_excl_tax
-
-        FROM "{SCHEMA}".sales s
-        LEFT JOIN "{SCHEMA}"."inventory-1" i
-            ON s."inventory-id" = i.id
-        LEFT JOIN "{SCHEMA}"."invoice-items-1" ii
-            ON i."invoice-item-id" = ii.id
-        WHERE s."created-date" >= '2026-04-01'
-          AND s."created-date" <= '2026-05-31'
-          AND s."created-date" <  CURRENT_DATE
-          AND s."franchisee-id" = 1
-          AND s."drug-id" IN ({drug_list})
-    """
-    df = pd.read_sql(query, conn)
-    conn.close()
-    return df
+    return pd.read_csv("data.csv")
 
 # ─── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Summer Fest Dashboard", page_icon="📊", layout="wide")
@@ -84,7 +15,8 @@ st.set_page_config(page_title="Summer Fest Dashboard", page_icon="📊", layout=
 try:
     df = load_data()
 except Exception as e:
-    st.error(f"❌ Could not fetch data from Redshift: {e}")
+    st.error(f"❌ Could not load data.csv: {e}")
+    st.info("💡 Make sure to run `python update_data.py` first to fetch data from Redshift.")
     st.stop()
 
 # ─── Prep ──────────────────────────────────────────────────────────────────────
