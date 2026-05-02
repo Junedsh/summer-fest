@@ -55,6 +55,10 @@ selected_lms = st.sidebar.multiselect("Line Manager", all_lms, default=[], place
 all_abos = sorted(df["abo"].dropna().unique())
 selected_abos = st.sidebar.multiselect("ABO", all_abos, default=[], placeholder="Select ABOs (leave empty for All)")
 
+# Store Name
+all_stores = sorted(df["store_name"].dropna().unique())
+selected_stores = st.sidebar.multiselect("Store Name", all_stores, default=[], placeholder="Select Stores (leave empty for All)")
+
 # ─── Apply Filters ─────────────────────────────────────────────────────────────
 fdf = df.copy()
 fdf = fdf[(fdf["transaction_date"] >= start_date) & (fdf["transaction_date"] <= end_date)]
@@ -64,6 +68,8 @@ if selected_lms:
     fdf = fdf[fdf["line_manager"].isin(selected_lms)]
 if selected_abos:
     fdf = fdf[fdf["abo"].isin(selected_abos)]
+if selected_stores:
+    fdf = fdf[fdf["store_name"].isin(selected_stores)]
 
 # ─── Revenue & RGM Calculation ─────────────────────────────────────────────────
 def calc_metrics(data):
@@ -80,7 +86,7 @@ st.title("📊 Summer Fest Dashboard")
 st.caption(f"Data refreshes once daily · Last loaded: {datetime.now().strftime('%d %b %Y, %I:%M %p')}")
 
 # ─── Tabs ──────────────────────────────────────────────────────────────────────
-tab_dashboard, tab_targets, tab_achieve = st.tabs(["📈 Dashboard", "🎯 Target Setting", "🏆 Target vs Achievement"])
+tab_dashboard, tab_targets, tab_achieve, tab_growth = st.tabs(["📈 Dashboard", "🎯 Target Setting", "🏆 Target vs Achievement", "📊 LMTD vs MTD Growth"])
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  TAB 1 — DASHBOARD
@@ -261,7 +267,7 @@ with tab_achieve:
     contest_option = st.selectbox(
         "Select Contest Month",
         ["April 2026", "May 2026"],
-        index=0,
+        index=1,
     )
 
     if contest_option == "April 2026":
@@ -360,6 +366,65 @@ with tab_achieve:
         o3.metric("Actual", f"₹{total_act:,.0f}")
         o4.metric("MTD Achievement %", f"{mtd_pct:.1f}%")
         o5.metric("Days Elapsed", f"{days_elapsed} / {CONTEST_DAYS}")
+        
+        # ── Generate PDF ──────────────────────────────────────────────────
+        try:
+            from fpdf import FPDF
+            
+            def create_pdf(perf_df, month_label, d_elapsed, c_days, t_act, t_mtd_tgt):
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("helvetica", size=16, style="B")
+                pdf.cell(190, 10, text=f"Summer Fest Contest - {month_label} Target vs Achievement", align='C', new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(5)
+                
+                pdf.set_font("helvetica", size=11, style="B")
+                m_pct = (t_act / t_mtd_tgt * 100) if t_mtd_tgt else 0
+                pdf.cell(190, 8, text=f"Days Elapsed: {d_elapsed} / {c_days}", new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(190, 8, text=f"Overall MTD Achievement: {m_pct:.1f}% (Actual: Rs {t_act:,.0f} / MTD Target: Rs {t_mtd_tgt:,.0f})", new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(5)
+                
+                lm_list = sorted(perf_df["line_manager"].unique())
+                for lm in lm_list:
+                    pdf.set_font("helvetica", size=12, style="B")
+                    pdf.cell(190, 8, text=f"Line Manager: {lm}", new_x="LMARGIN", new_y="NEXT")
+                    
+                    # Table Header
+                    pdf.set_font("helvetica", size=9, style="B")
+                    pdf.cell(12, 6, text="Rank", border=1, align="C")
+                    pdf.cell(55, 6, text="ABO", border=1, align="L")
+                    pdf.cell(24, 6, text="Month Tgt", border=1, align="R")
+                    pdf.cell(24, 6, text="MTD Tgt", border=1, align="R")
+                    pdf.cell(24, 6, text="Actual", border=1, align="R")
+                    pdf.cell(20, 6, text="Ach %", border=1, align="R")
+                    pdf.cell(31, 6, text="Prize", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+                    
+                    pdf.set_font("helvetica", size=8)
+                    lm_data = perf_df[perf_df["line_manager"] == lm].sort_values("rank")
+                    for _, row in lm_data.iterrows():
+                        pdf.cell(12, 6, text=str(row["rank"]), border=1, align="C")
+                        pdf.cell(55, 6, text=str(row["abo"])[:30], border=1, align="L")
+                        pdf.cell(24, 6, text=f"{row['target']:,.0f}", border=1, align="R")
+                        pdf.cell(24, 6, text=f"{row['mtd_target']:,.0f}", border=1, align="R")
+                        pdf.cell(24, 6, text=f"{row['actual']:,.0f}", border=1, align="R")
+                        pdf.cell(20, 6, text=f"{row['mtd_achieve_pct']:.1f}%", border=1, align="R")
+                        
+                        prize = str(row["prize"]).replace('🥇', '1st:').replace('🥈', '2nd:').replace('₹', 'Rs ')
+                        pdf.cell(31, 6, text=prize, border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+                    
+                    pdf.ln(5)
+                    
+                return bytes(pdf.output())
+                
+            pdf_bytes = create_pdf(perf, CONTEST_MONTH_LABEL, days_elapsed, CONTEST_DAYS, total_act, total_mtd_tgt)
+            st.download_button(
+                label="📄 Download Leaderboard as PDF",
+                data=pdf_bytes,
+                file_name=f"{CONTEST_MONTH_LABEL}_Leaderboard.pdf",
+                mime="application/pdf",
+            )
+        except ImportError:
+            st.warning("PDF generation requires the `fpdf2` package. Run `pip install fpdf2` to enable.")
 
         st.divider()
 
@@ -424,3 +489,104 @@ with tab_achieve:
             disp_s["Actual"]       = disp_s["Actual"].apply(lambda x: f"₹{x:,.0f}")
             disp_s["MTD Gap"]      = s_perf["mtd_gap"].apply(lambda x: f"₹{x:,.0f}")
             st.dataframe(disp_s, use_container_width=True, hide_index=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  TAB 4 — LMTD vs MTD GROWTH
+# ══════════════════════════════════════════════════════════════════════════════
+with tab_growth:
+    from datetime import date
+    
+    st.subheader("📊 LMTD vs MTD Growth (Drug-wise)")
+    
+    c_month_opt = st.selectbox(
+        "Select Current Month (MTD)",
+        ["April 2026", "May 2026"],
+        index=1,
+        key="growth_month"
+    )
+    
+    # We use mtd_day from the sidebar, but cap it to the max date available in the selected month
+    max_dt = df["transaction_date"].max()
+    
+    if c_month_opt == "May 2026":
+        if max_dt.year == 2026 and max_dt.month == 5:
+            dynamic_cutoff = min(mtd_day, max_dt.day)
+        else:
+            dynamic_cutoff = min(mtd_day, 31)
+            
+        mtd_start = date(2026, 5, 1)
+        mtd_end = date(2026, 5, dynamic_cutoff)
+        lmtd_start = date(2026, 4, 1)
+        lmtd_end = date(2026, 4, min(dynamic_cutoff, 30))
+    else:
+        if max_dt.year == 2026 and max_dt.month == 4:
+            dynamic_cutoff = min(mtd_day, max_dt.day)
+        else:
+            dynamic_cutoff = min(mtd_day, 30)
+            
+        mtd_start = date(2026, 4, 1)
+        mtd_end = date(2026, 4, dynamic_cutoff)
+        lmtd_start = date(2026, 3, 1)
+        lmtd_end = date(2026, 3, min(dynamic_cutoff, 31))
+
+    st.info(f"**MTD Period:** {mtd_start.strftime('%d %b %Y')} to {mtd_end.strftime('%d %b %Y')}  \n**LMTD Period:** {lmtd_start.strftime('%d %b %Y')} to {lmtd_end.strftime('%d %b %Y')}")
+
+    # Apply Sidebar Line Manager, ABO, and Store filters to the raw df
+    base_growth_df = df.copy()
+    if selected_lms:
+        base_growth_df = base_growth_df[base_growth_df["line_manager"].isin(selected_lms)]
+    if selected_abos:
+        base_growth_df = base_growth_df[base_growth_df["abo"].isin(selected_abos)]
+    if selected_stores:
+        base_growth_df = base_growth_df[base_growth_df["store_name"].isin(selected_stores)]
+        
+    mtd_data = base_growth_df[(base_growth_df["transaction_date"] >= mtd_start) & (base_growth_df["transaction_date"] <= mtd_end)]
+    lmtd_data = base_growth_df[(base_growth_df["transaction_date"] >= lmtd_start) & (base_growth_df["transaction_date"] <= lmtd_end)]
+    
+    def calc_drug_metrics(data):
+        if data.empty:
+            return pd.DataFrame(columns=["Revenue", "RGM"])
+        
+        rev = data.groupby("drug_name")["rev_with_tax"].sum()
+        rev_excl = data.groupby("drug_name")["revenue_excl_tax"].sum()
+        
+        gross = data[data["bill_flag"] == "gross"].groupby("drug_name")["purchase_excl_tax"].sum()
+        zrf = data[data["bill_flag"] == "gross"].groupby("drug_name")["zrf_purchase_excl_tax"].sum()
+        ret = data[data["bill_flag"] == "return"].groupby("drug_name")["purchase_excl_tax"].sum()
+        
+        df_metrics = pd.DataFrame({"Revenue": rev, "Revenue Excl Tax": rev_excl})
+        df_metrics["gross_cogs"] = gross
+        df_metrics["zrf_gross"] = zrf
+        df_metrics["return_cogs"] = ret
+        
+        df_metrics = df_metrics.fillna(0)
+        df_metrics["RGM"] = df_metrics["Revenue Excl Tax"] - (df_metrics["gross_cogs"] - df_metrics["zrf_gross"]) - df_metrics["return_cogs"]
+        
+        return df_metrics[["Revenue", "RGM"]]
+
+    mtd_metrics = calc_drug_metrics(mtd_data).rename(columns={"Revenue": "MTD Revenue", "RGM": "MTD RGM"})
+    lmtd_metrics = calc_drug_metrics(lmtd_data).rename(columns={"Revenue": "LMTD Revenue", "RGM": "LMTD RGM"})
+    
+    if mtd_metrics.empty and lmtd_metrics.empty:
+        st.warning("⚠️ No data available for the selected periods.")
+    else:
+        growth_df = mtd_metrics.join(lmtd_metrics, how="outer").fillna(0)
+        
+        growth_df["Revenue Growth"] = growth_df["MTD Revenue"] - growth_df["LMTD Revenue"]
+        growth_df["Revenue Growth %"] = (growth_df["Revenue Growth"] / growth_df["LMTD Revenue"].replace(0, float("nan")) * 100)
+        
+        growth_df["RGM Growth"] = growth_df["MTD RGM"] - growth_df["LMTD RGM"]
+        growth_df["RGM Growth %"] = (growth_df["RGM Growth"] / growth_df["LMTD RGM"].replace(0, float("nan")) * 100)
+        
+        growth_df = growth_df.reset_index().sort_values("MTD Revenue", ascending=False)
+        
+        disp_growth = growth_df.copy()
+        disp_growth.rename(columns={"drug_name": "Drug Name"}, inplace=True)
+        
+        for col in ["MTD Revenue", "LMTD Revenue", "Revenue Growth", "MTD RGM", "LMTD RGM", "RGM Growth"]:
+            disp_growth[col] = disp_growth[col].apply(lambda x: f"₹{x:,.0f}")
+        
+        for col in ["Revenue Growth %", "RGM Growth %"]:
+            disp_growth[col] = disp_growth[col].apply(lambda x: f"{x:.1f}%" if pd.notnull(x) else "N/A")
+        
+        st.dataframe(disp_growth, use_container_width=True, hide_index=True)
